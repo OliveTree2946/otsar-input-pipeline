@@ -2,9 +2,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { ParseResultSchema, RELATIONS, NODE_TYPES } from "./types";
 import type { ParseResult, SourceType } from "./types";
 
-const MODEL = "claude-opus-4-6";
+const MODEL = "claude-sonnet-4-6";
 const MAX_OUTPUT_TOKENS = 4096;
-const MAX_INPUT_CHARS = 12_000;
+const MAX_INPUT_CHARS = 10_000;
 
 const SYSTEM_PROMPT = `당신은 Joseph의 개인 지식을 구조화하는 파서입니다.
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { splitText } from "@/lib/text-splitter";
 
 type Mode = "youtube" | "chat" | "memo";
 type Phase = "idle" | "fetchingTranscript" | "parsing" | "review" | "saving" | "done" | "error";
@@ -20,6 +21,38 @@ interface ParseResult {
   edges: Edge[];
 }
 interface CommittedFile { path: string; htmlUrl: string; nodeId: string; }
+
+type PartStatus = "pending" | "parsing" | "done" | "failed";
+
+function mergeResults(results: ParseResult[]): ParseResult {
+  const seenNodeIds = new Set<string>();
+  const nodes: Node[] = [];
+  for (const r of results) {
+    for (const n of r.nodes) {
+      if (!seenNodeIds.has(n.id)) {
+        seenNodeIds.add(n.id);
+        nodes.push(n);
+      }
+    }
+  }
+
+  const seenEdges = new Set<string>();
+  const edges: Edge[] = [];
+  for (const r of results) {
+    for (const e of r.edges) {
+      const key = `${e.source}|${e.target}|${e.relation}`;
+      if (!seenEdges.has(key)) {
+        seenEdges.add(key);
+        edges.push(e);
+      }
+    }
+  }
+
+  const importance = Math.max(...results.map((r) => r.importance));
+  const summary = results.map((r) => r.summary).join(" | ");
+
+  return { importance, summary, nodes, edges };
+}
 
 const MODES: { id: Mode; label: string; placeholder: string }[] = [
   { id: "youtube", label: "YouTube", placeholder: "https://www.youtube.com/watch?v=..." },
@@ -72,6 +105,9 @@ export default function Page() {
   const [committed, setCommitted] = useState<CommittedFile[] | null>(null);
   const [rawResponse, setRawResponse] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
+  const [splitInfo, setSplitInfo] = useState<{ totalChars: number; partCount: number } | null>(null);
+  const [partStatuses, setPartStatuses] = useState<PartStatus[]>([]);
+  const [showAllNodes, setShowAllNodes] = useState(false);
 
   const edgesBySource = useMemo(() => {
     if (!result) return new Map<string, Edge[]>();
@@ -97,6 +133,9 @@ export default function Page() {
     setSourceUrl(undefined);
     setRawResponse(null);
     setShowRaw(false);
+    setSplitInfo(null);
+    setPartStatuses([]);
+    setShowAllNodes(false);
     try {
       let textToParse = input.trim();
       let url: string | undefined;
@@ -107,15 +146,61 @@ export default function Page() {
         textToParse = transcript;
       }
       setPhase("parsing");
-      const { result, truncated } = await postJson<{ result: ParseResult; truncated: boolean }>("/api/parse", {
-        text: textToParse,
-        sourceType: mode,
-        sourceUrl: url,
-      });
-      setResult(result);
-      setSourceUrl(url);
-      setTruncated(truncated);
-      setPhase("review");
+
+      const parts = splitText(textToParse);
+
+      if (parts.length === 1) {
+        const { result, truncated } = await postJson<{ result: ParseResult; truncated: boolean }>("/api/parse", {
+          text: textToParse,
+          sourceType: mode,
+          sourceUrl: url,
+        });
+        setResult(result);
+        setSourceUrl(url);
+        setTruncated(truncated);
+        setPhase("review");
+      } else {
+        setSplitInfo({ totalChars: textToParse.length, partCount: parts.length });
+        setPartStatuses(new Array(parts.length).fill("pending") as PartStatus[]);
+
+        const partResults: ParseResult[] = [];
+        for (let i = 0; i < parts.length; i++) {
+          setPartStatuses((prev) => {
+            const next = [...prev];
+            next[i] = "parsing";
+            return next;
+          });
+          try {
+            const { result } = await postJson<{ result: ParseResult; truncated: boolean }>("/api/parse", {
+              text: parts[i],
+              sourceType: mode,
+              sourceUrl: url,
+            });
+            partResults.push(result);
+            setPartStatuses((prev) => {
+              const next = [...prev];
+              next[i] = "done";
+              return next;
+            });
+          } catch {
+            setPartStatuses((prev) => {
+              const next = [...prev];
+              next[i] = "failed";
+              return next;
+            });
+          }
+        }
+
+        if (partResults.length === 0) {
+          throw new ApiError("모든 파트 파싱이 실패했습니다.");
+        }
+
+        const merged = mergeResults(partResults);
+        setResult(merged);
+        setSourceUrl(url);
+        setTruncated(false);
+        setPhase("review");
+      }
     } catch (e) {
       const err = e as ApiError;
       setError(err.message);
@@ -152,6 +237,9 @@ export default function Page() {
     setTruncated(false);
     setRawResponse(null);
     setShowRaw(false);
+    setSplitInfo(null);
+    setPartStatuses([]);
+    setShowAllNodes(false);
   }
 
   const busy = phase === "fetchingTranscript" || phase === "parsing" || phase === "saving";
@@ -235,7 +323,36 @@ export default function Page() {
 
       {truncated && phase === "review" && (
         <div className="mb-4 rounded border border-amber-800 bg-amber-950/40 p-3 text-xs text-amber-200">
-          입력이 12,000자를 초과하여 앞부분만 파싱합니다.
+          입력이 10,000자를 초과하여 앞부분만 파싱되었습니다.
+        </div>
+      )}
+
+      {splitInfo && (
+        <div className="mb-4 rounded border border-sky-800 bg-sky-950/40 p-3 text-xs text-sky-200">
+          <div>
+            {splitInfo.totalChars.toLocaleString()}자 → {splitInfo.partCount}개 파트로 나눠서 파싱합니다
+          </div>
+          {partStatuses.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {partStatuses.map((s, i) => (
+                <span
+                  key={i}
+                  className={`px-2 py-0.5 rounded text-xs ${
+                    s === "parsing"
+                      ? "bg-sky-700 text-white"
+                      : s === "done"
+                      ? "bg-emerald-800 text-emerald-100"
+                      : s === "failed"
+                      ? "bg-rose-800 text-rose-100"
+                      : "bg-neutral-800 text-neutral-400"
+                  }`}
+                >
+                  파트 {i + 1}{" "}
+                  {s === "parsing" ? "파싱 중…" : s === "done" ? "✅" : s === "failed" ? "❌" : ""}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -258,7 +375,10 @@ export default function Page() {
           </div>
 
           <div className="grid gap-3">
-            {result.nodes.map((n) => (
+            {(showAllNodes || result.nodes.length <= 10
+              ? result.nodes
+              : result.nodes.slice(0, 10)
+            ).map((n) => (
               <div key={n.id} className="rounded border border-neutral-800 bg-neutral-900/40 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`text-xs px-2 py-0.5 rounded border ${TYPE_COLORS[n.type]}`}>{n.type}</span>
@@ -287,6 +407,14 @@ export default function Page() {
                 )}
               </div>
             ))}
+            {!showAllNodes && result.nodes.length > 10 && (
+              <button
+                onClick={() => setShowAllNodes(true)}
+                className="py-2 rounded border border-neutral-700 text-sm text-neutral-400 hover:border-neutral-500 hover:text-neutral-200"
+              >
+                더 보기 (+{result.nodes.length - 10}개) — 저장 시 전부 포함됩니다
+              </button>
+            )}
           </div>
 
           <button
