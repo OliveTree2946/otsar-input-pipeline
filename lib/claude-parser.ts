@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { ParseResultSchema, RELATIONS, NODE_TYPES } from "./types";
 import type { ParseResult, SourceType } from "./types";
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL = "claude-opus-4-6";
 const MAX_OUTPUT_TOKENS = 4096;
 const MAX_INPUT_CHARS = 10_000;
 
