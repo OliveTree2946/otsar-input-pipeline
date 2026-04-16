@@ -6,18 +6,26 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 function classifyError(error: any): string {
+  const code: string = error?.code ?? "";
+  const status: number = error?.status ?? 500;
   const msg: string = error?.message ?? String(error);
-  const lower = msg.toLowerCase();
-  if (error?.code === "NO_SUBTITLES" || lower.includes("자막이 비활성화")) {
-    return "자막이 비활성화된 영상입니다";
+
+  if (code === "NO_TRANSCRIPT" || msg.includes("자막이 없습니다")) {
+    return "이 영상에는 자막이 없습니다";
   }
-  if (lower.includes("not found") || lower.includes("404")) {
+  if (status === 401 || msg.includes("401")) {
+    return "인증 실패 — API 키 확인 필요";
+  }
+  if (status === 403 || msg.includes("403")) {
+    return "접근 제한 영상입니다";
+  }
+  if (status === 404 || msg.includes("not found") || msg.includes("404")) {
     return "영상을 찾을 수 없습니다";
   }
-  if (lower.includes("subtitles") || lower.includes("caption")) {
-    return "자막 추출 중 오류 발생 (재시도 요망)";
+  if (status === 429 || msg.includes("429")) {
+    return "월 사용량 초과 — Supadata 대시보드 확인 필요";
   }
-  return "알 수 없는 오류 — Vercel Logs 확인 필요";
+  return "자막 추출 오류 — Vercel Logs 확인 필요";
 }
 
 export async function POST(req: Request) {
@@ -32,10 +40,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "url required" }, { status: 400 });
     }
 
-    const { transcript, videoId, selectedLang, videoTitle } = await fetchTranscriptText(originalUrl);
+    const { transcript, videoId, lang, availableLangs, creditsUsed } =
+      await fetchTranscriptText(originalUrl);
     videoID = videoId;
 
-    return NextResponse.json({ transcript, videoId, selectedLang, videoTitle });
+    console.log(`[EC-027] Credits used: ${creditsUsed}, lang: ${lang}`);
+
+    return NextResponse.json({ transcript, videoId, lang, availableLangs, creditsUsed });
   } catch (error: any) {
     console.error("[EC-027] YouTube extraction failed:", {
       videoID,
