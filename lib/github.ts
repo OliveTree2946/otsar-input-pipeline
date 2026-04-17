@@ -1,4 +1,13 @@
 import { Octokit } from "@octokit/rest";
+import { extractVideoId } from "./youtube";
+
+function normalizeSourceUrl(sourceType: string, url: string): string {
+  if (sourceType === "youtube") {
+    const id = extractVideoId(url);
+    if (id) return `youtube:${id}`;
+  }
+  return url;
+}
 
 export interface GitHubConfig {
   token: string;
@@ -100,14 +109,19 @@ export async function commitFile(args: {
 
   if (existing.kind === "exists" && existing.frontmatter) {
     const { sourceType: wantType, sourceUrl: wantUrl } = args.expectedSource;
+    const wantKey = normalizeSourceUrl(wantType, wantUrl);
+    const haveKey = normalizeSourceUrl(
+      existing.frontmatter.sourceType,
+      existing.frontmatter.sourceUrl,
+    );
     const sameSource =
       wantType.length > 0 &&
       wantUrl.length > 0 &&
       existing.frontmatter.sourceType === wantType &&
-      existing.frontmatter.sourceUrl === wantUrl;
+      wantKey === haveKey;
     if (sameSource) {
       console.log(
-        `[input-pipeline] skip path=${args.path} reason=source-match type=${wantType} url=${wantUrl}`,
+        `[input-pipeline] skip path=${args.path} reason=source-match type=${wantType} key=${wantKey}`,
       );
       return { path: args.path, sha: "", htmlUrl: "", skipped: true };
     }
