@@ -20,7 +20,7 @@ interface ParseResult {
   nodes: Node[];
   edges: Edge[];
 }
-interface CommittedFile { path: string; htmlUrl: string; nodeId: string; }
+interface CommittedFile { path: string; htmlUrl: string; nodeId: string; skipped: boolean; }
 
 type PartStatus = "pending" | "parsing" | "done" | "failed";
 
@@ -427,20 +427,30 @@ export default function Page() {
         </section>
       )}
 
-      {committed && phase === "done" && (
-        <section className="space-y-2">
-          <h2 className="text-sm text-neutral-400">저장 완료 ({committed.length}개 파일)</h2>
-          <ul className="space-y-1 text-sm">
-            {committed.map((c) => (
-              <li key={c.path}>
-                <a href={c.htmlUrl} target="_blank" rel="noreferrer" className="text-sky-300 hover:underline">
-                  {c.path}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {committed && phase === "done" && (() => {
+        const skippedCount = committed.filter((c) => c.skipped).length;
+        const writtenCount = committed.length - skippedCount;
+        return (
+          <section className="space-y-2">
+            <h2 className="text-sm text-neutral-400">
+              저장 완료 ({writtenCount}개 신규{skippedCount > 0 ? `, ${skippedCount}개 중복 skip` : ""})
+            </h2>
+            <ul className="space-y-1 text-sm">
+              {committed.map((c) => (
+                <li key={c.path}>
+                  {c.skipped ? (
+                    <span className="text-neutral-500">{c.path} <span className="text-xs">(이미 존재 — skip)</span></span>
+                  ) : (
+                    <a href={c.htmlUrl} target="_blank" rel="noreferrer" className="text-sky-300 hover:underline">
+                      {c.path}
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })()}
     </main>
   );
 }

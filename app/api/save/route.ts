@@ -25,14 +25,21 @@ export async function POST(req: Request) {
     }
 
     const parseResult = parsed.data;
+    const sourceType = body.sourceType as SourceType;
+    const sourceUrl = body.sourceUrl ?? "";
     const createdISODate = new Date().toISOString().slice(0, 10);
     const suffix = timestampSuffix();
-    const committed: { path: string; htmlUrl: string; nodeId: string }[] = [];
+    const committed: {
+      path: string;
+      htmlUrl: string;
+      nodeId: string;
+      skipped: boolean;
+    }[] = [];
 
     for (const node of parseResult.nodes) {
       const content = renderNodeMarkdown(node, {
-        sourceType: body.sourceType as SourceType,
-        sourceUrl: body.sourceUrl,
+        sourceType,
+        sourceUrl,
         createdISODate,
         parseResult,
       });
@@ -43,8 +50,14 @@ export async function POST(req: Request) {
         altPathIfExists: altPath,
         content,
         message: `[input-pipeline] Add ${node.type}: ${node.label}`,
+        expectedSource: { sourceType, sourceUrl },
       });
-      committed.push({ path: result.path, htmlUrl: result.htmlUrl, nodeId: node.id });
+      committed.push({
+        path: result.path,
+        htmlUrl: result.htmlUrl,
+        nodeId: node.id,
+        skipped: result.skipped === true,
+      });
     }
 
     return NextResponse.json({ committed });
