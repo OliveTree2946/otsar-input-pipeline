@@ -43,8 +43,8 @@ export async function POST(req: Request) {
         createdISODate,
         parseResult,
       });
-      const primaryPath = vaultPathForNode(node);
-      const altPath = vaultPathForNode(node, suffix);
+      const primaryPath = vaultPathForNode(node, createdISODate);
+      const altPath = vaultPathForNode(node, createdISODate, suffix);
       const result = await commitFile({
         path: primaryPath,
         altPathIfExists: altPath,

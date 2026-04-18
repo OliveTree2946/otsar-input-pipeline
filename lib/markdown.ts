@@ -1,5 +1,4 @@
 import type { Edge, Node, ParseResult, SourceType } from "./types";
-import { NODE_TYPE_PREFIX } from "./types";
 
 const PIPELINE_VERSION = 1;
 
@@ -20,10 +19,9 @@ function slugifyId(id: string, type: string): string {
     .replace(/^-|-$/g, "");
 }
 
-export function vaultPathForNode(node: Node, suffix?: string): string {
-  const prefix = NODE_TYPE_PREFIX[node.type];
+export function vaultPathForNode(node: Node, date: string, suffix?: string): string {
   const slug = slugifyId(node.id, node.type);
-  const base = `${prefix}-${slug}`;
+  const base = `${date}-${slug}`;
   const name = suffix ? `${base}-${suffix}.md` : `${base}.md`;
   return `vault/raw/input-pipeline/${name}`;
 }

@@ -41,11 +41,3 @@ export const ParseResultSchema = z.object({
   edges: z.array(EdgeSchema),
 });
 export type ParseResult = z.infer<typeof ParseResultSchema>;
-
-export const NODE_TYPE_PREFIX: Record<NodeType, string> = {
-  concept: "c",
-  person: "p",
-  tool: "t",
-  idea: "d",
-  event: "x",
-};
