@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-04-19T00:00:00Z",
+  "count": 312,
+  "sampleFilenames": [
+    "c-3node-local-ai.md",
+    "c-agent-scaling.md",
+    "c-agentic-ai-risk.md",
+    "c-agentic-ai.md",
+    "c-agentic-automation.md",
+    "c-agentic-os-wiki.md",
+    "c-agentic-os.md",
+    "c-agentic-wiki-execution-path.md",
+    "c-agenticos-enforcement.md",
+    "c-agenticos-four-layer.md"
+  ],
+  "note": "vault/raw/input-pipeline/*.md 312개 — EC-B01 베이스라인"
+}
